@@ -21,6 +21,7 @@
 #include <iostream>
 #include <sstream>
 #include <cassert>
+#include <emscripten.h>
 #include "game_interpreter.h"
 #include "audio.h"
 #include "dynrpg.h"
@@ -1902,30 +1903,50 @@ bool Game_Interpreter::CommandEndEventProcessing(lcf::rpg::EventCommand const& /
 }
 
 bool Game_Interpreter::CommandComment(const lcf::rpg::EventCommand &com) {
+	if (com.string.empty() || com.string[0] != '@') {
+		// Not a DynRPG command
+		return true;
+	}
+
+	auto& frame = GetFrame();
+	const auto& list = frame.commands;
+	auto& index = frame.current_command;
+
+	std::string command = ToString(com.string);
+	// Concat everything that is not another command or a new comment block
+	for (size_t i = index + 1; i < list.size(); ++i) {
+		const auto& cmd = list[i];
+		if (cmd.code == static_cast<uint32_t>(Cmd::Comment_2) &&
+				!cmd.string.empty() && cmd.string[0] != '@') {
+			command += ToString(cmd.string);
+		} else {
+			break;
+		}
+	}
+
+	std::vector<std::string> args;
+	std::string function_name = DynRpg::ParseCommand(command, args);
+	const char* arr[100];
+	arr[0] = function_name.data();
+	int i = 1;
+	for (auto it = args.begin(); it != args.end(); ++it) {
+		arr[i] = it->data();
+		i++;
+	}
+
+	EM_ASM({
+		var args = [];
+		var ptr = $0 >> 2;
+		for (var i = 0; i < $1; i++) {
+			args[i] = UTF8ToString(HEAP32[ptr + i]);
+		}
+		callAtsumaruApi.apply(null, args);
+	}, arr, i);
+
 	if (Player::IsPatchDynRpg()) {
-		if (com.string.empty() || com.string[0] != '@') {
-			// Not a DynRPG command
-			return true;
-		}
-
-		auto& frame = GetFrame();
-		const auto& list = frame.commands;
-		auto& index = frame.current_command;
-
-		std::string command = ToString(com.string);
-		// Concat everything that is not another command or a new comment block
-		for (size_t i = index + 1; i < list.size(); ++i) {
-			const auto& cmd = list[i];
-			if (cmd.code == static_cast<uint32_t>(Cmd::Comment_2) &&
-					!cmd.string.empty() && cmd.string[0] != '@') {
-				command += ToString(cmd.string);
-			} else {
-				break;
-			}
-		}
-
 		return DynRpg::Invoke(command);
 	}
+
 	return true;
 }
 

@@ -19,6 +19,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <emscripten.h>
 #include "scene_title.h"
 #include "audio.h"
 #include "audio_secache.h"
@@ -47,6 +48,10 @@ Scene_Title::Scene_Title() {
 
 void Scene_Title::Start() {
 	Main_Data::game_system->ResetSystemGraphic();
+
+	EM_ASM({
+		callAtsumaruApi('setcommentgpos');
+	});
 
 	// Skip background image and music if not used
 	if (CheckEnableTitleGraphicAndMusic()) {
