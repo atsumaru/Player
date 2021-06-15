@@ -19,6 +19,7 @@
 #include <cctype>
 #include <sstream>
 #include <iterator>
+#include <emscripten.h>
 
 #include "compiler.h"
 #include "window_message.h"
@@ -179,6 +180,10 @@ void Window_Message::StartMessageProcessing(PendingMessage pm) {
 	item_max = min(4, pending_message.GetNumChoices());
 
 	text_index = text.data();
+
+	EM_ASM({
+		callAtsumaruApi('setcommentgpos', $0, UTF8ToString($1));
+	}, Game_Map::GetMapId(), text_index);
 
 	DebugLog("{}: MSG TEXT \n{}", text);
 
